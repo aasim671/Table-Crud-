@@ -2,20 +2,21 @@ import { Component, ViewChild, AfterViewInit } from '@angular/core';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatSort } from '@angular/material/sort';
 import { MatTableDataSource } from '@angular/material/table';
-import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
-import { MatFormFieldModule, MatLabel } from '@angular/material/form-field';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
 import { EmployeeService } from './services/employee.service';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogComponent } from './components/dialog/dialog.component';
 import { DelteteComponen } from './components/delete/delete.component';
-import { MatIconModule } from '@angular/material/icon';
 import { ChangeDetectorRef } from '@angular/core';
+import { merge, of as observableOf } from 'rxjs';
+import { catchError, map, startWith, switchMap } from 'rxjs/operators';
 
 // Define the Employee interface
 export interface Employee {
@@ -23,31 +24,51 @@ export interface Employee {
   firstname: string;
   lastname: string;
   email: string;
+  fullname?: string;
+}
+
+// Define the structure of the API response
+export interface EmployeeResponse {
+  data: Array<{
+    id: number;
+    attributes: {
+      firstname?: string;
+      lastname?: string;
+      email?: string;
+    }
+  }>;
+  meta: {
+    pagination: {
+      total: number;
+    }
+  }
 }
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
-    RouterOutlet,
-    MatPaginatorModule,
     CommonModule,
     MatButtonModule,
     MatTableModule,
+    MatPaginatorModule,
     MatSortModule,
-    MatLabel,
     MatFormFieldModule,
     MatInputModule,
+    MatIconModule,
     DialogComponent,
-    MatIconModule
+    DelteteComponen
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements AfterViewInit {
   title = 'Table';
-  displayedColumns: string[] = ['fullName', 'email', 'actions'];
+  displayedColumns: string[] = ['fullname', 'email', 'city', 'actions'];
   dataSource = new MatTableDataSource<Employee>();
+  Length = 0;
+  isLoadingResults = true;
+  searchTerm: string = '';
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -59,53 +80,64 @@ export class AppComponent implements AfterViewInit {
   ) { }
 
   ngAfterViewInit() {
-    this.dataSource.paginator! = this.paginator;
-    this.dataSource.sort = this.sort;
-    this.loadEmployees(); // Load initial data
-    this.paginator.page.subscribe(() => this.loadEmployees()); // Load data on page change
-  }
+    if (this.sort) {
+      this.sort.sortChange.subscribe(() => this.paginator.pageIndex = 0);
+    }
 
+    if (this.paginator) {
+      merge(this.sort?.sortChange ?? observableOf({}), this.paginator.page)
+        .pipe(
+          startWith({}),
+          switchMap(() => {
+            this.isLoadingResults = true;
+            const page = this.paginator.pageIndex + 1;
+            const pageSize = this.paginator.pageSize;
 
-  loadEmployees(): void {
-    const page = this.paginator.pageIndex + 1; // Adjust for zero-based index
-    const pageSize = this.paginator.pageSize;
-    console.log(`Fetching page ${page} with page size ${pageSize}`);
+            // Determine the sort field and order
+            const sortField = this.sort?.active || 'id';  // Default to 'id' if not defined
+            const sortOrder = this.sort?.direction || 'asc'; // Default to 'asc' if not defined
 
-    this.employeeService.getPaginatedData(page, pageSize).subscribe(response => {
-      console.log('API Response:', response);
+            return this.employeeService.filter(this.searchTerm, page, pageSize, sortField, sortOrder)
+              .pipe(catchError(() => observableOf({ data: [], meta: { pagination: { total: 0 } } })));
+          }),
+          map(response => {
+            this.isLoadingResults = false;
+            this.Length = response.meta.pagination.total;
 
-      const employees: Employee[] = response.data.map((item) => ({
-        id: item.id,
-        firstname: item.attributes.firstname || '',
-        lastname: item.attributes.lastname || '',
-        email: item.attributes.email || ''
-      }));
+            const employees: Employee[] = response.data.map(item => ({
+              id: item.id,
+              firstname: item.attributes.firstname || '',
+              lastname: item.attributes.lastname || '',
+              email: item.attributes.email || '',
+              fullname: `${item.attributes.firstname || ''} ${item.attributes.lastname || ''}`  // Combine fullname
+            }));
 
-      this.dataSource.data = employees;
-      this.paginator.length = response.meta.pagination.total;
-      this.cdr.detectChanges();
-    });
+            return employees;
+          })
+        )
+        .subscribe(data => {
+          this.dataSource.data = data;
+          this.cdr.detectChanges();
+        });
+    }
   }
 
   applyFilter(event: Event) {
-    const filterValue = (event.target as HTMLInputElement).value;
-    this.dataSource.filter = filterValue.trim().toLowerCase();
+    this.searchTerm = (event.target as HTMLInputElement).value.trim().toLowerCase();
+    this.paginator.pageIndex = 0; // Reset to the first page
+    this.loadData();
   }
 
-  delete(element: Employee) {
+  delete(employee: Employee) {
     const dialogRef = this.dialog.open(DelteteComponen, {
-      data: element
+      data: employee
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.employeeService.delete(result).subscribe({
-          next: () => {
-            this.loadEmployees(); // Reload employees after deletion
-          },
-          error: err => {
-            console.error('Delete failed', err);
-          }
+          next: () => this.loadData(),
+          error: err => console.error('Delete failed', err)
         });
       }
     });
@@ -113,7 +145,6 @@ export class AppComponent implements AfterViewInit {
 
   opendialog(employee?: Employee): void {
     const dialogRef = this.dialog.open(DialogComponent, {
-
       data: employee,
     });
 
@@ -121,24 +152,47 @@ export class AppComponent implements AfterViewInit {
       this.updateTable(result);
     });
 
+    dialogRef.componentInstance.employeeSaved.subscribe(() => {
+      this.loadData(); // Refresh data when employee is saved
+    });
     dialogRef.afterClosed().subscribe(() => {
-      // Optionally handle after dialog is closed
+
     });
   }
 
   updateTable(updatedEmployee: Employee): void {
-    const data = this.dataSource.data.slice(); // Create a copy of the data array
+    const data = this.dataSource.data.slice();
     const index = data.findIndex(emp => emp.id === updatedEmployee.id);
 
     if (index !== -1) {
-      // Update existing employee
       data[index] = updatedEmployee;
     } else {
-      // Add new employee if it does not exist
       data.push(updatedEmployee);
     }
 
-    // Update the dataSource with the new data
     this.dataSource.data = data;
+  }
+
+  loadData(): void {
+    const page = this.paginator.pageIndex + 1;
+    const pageSize = this.paginator.pageSize;
+    const sortField = this.sort.active || 'id';
+    const sortOrder = this.sort.direction || 'asc';
+
+    this.employeeService.filter(this.searchTerm, page, pageSize, sortField, sortOrder).subscribe(response => {
+      console.log('API Response:', response);
+
+      const employees: Employee[] = response.data.map(item => ({
+        id: item.id,
+        firstname: item.attributes.firstname || '',
+        lastname: item.attributes.lastname || '',
+        email: item.attributes.email || '',
+        fullname: `${item.attributes.firstname || ''} ${item.attributes.lastname || ''}`
+      }));
+
+      this.dataSource.data = employees;
+      this.Length = response.meta.pagination.total;
+      this.cdr.detectChanges();
+    });
   }
 }

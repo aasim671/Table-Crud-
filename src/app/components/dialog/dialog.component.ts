@@ -51,7 +51,7 @@ export class DialogComponent {
     };
   }
 
-  onsave() {
+  onsave(): void {
     const url = this.employeeObj.id
       ? `http://localhost:1337/api/products/${this.employeeObj.id}`
       : 'http://localhost:1337/api/products';
@@ -67,6 +67,7 @@ export class DialogComponent {
       })
     ).subscribe(response => {
       if (response) {
+        // Emit event to notify about the saved employee
         this.employeeSaved.emit(this.employeeObj);
         this.dialogRef.close();
       }

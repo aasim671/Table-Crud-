@@ -1,27 +1,28 @@
-<div class="dialog-full"><div mat-dialog-title>
-  <h3>Fill the form.</h3>
-</div>
-<div mat-dialog-content class="content">
-  <div class="row">
-    <mat-form-field appearance="outline">
-      <mat-label>First Name</mat-label>
-      <input matInput placeholder="First Name" [(ngModel)]="employeeObj.firstname">
-    </mat-form-field>
-    <mat-form-field appearance="outline">
-      <mat-label>Last Name</mat-label>
-      <input matInput placeholder="Last Name" [(ngModel)]="employeeObj.lastname">
-    </mat-form-field>
+<div class="dialog-full">
+  <div mat-dialog-title>
+    <h5>Fill the form.</h5>
   </div>
+  <div mat-dialog-content class="content">
+    <div class="row">
+      <mat-form-field appearance="outline">
+        <mat-label>Full Name</mat-label>
+        <input matInput placeholder="Full Name" [(ngModel)]="employeeObj.firstname">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>City</mat-label>
+        <input matInput placeholder="City" [(ngModel)]="employeeObj.lastname">
+      </mat-form-field>
+    </div>
 
-  <div class="row">
-    <mat-form-field appearance="outline">
-      <mat-label>Email</mat-label>
-      <input matInput placeholder="test@gmail.com" type="email" [(ngModel)]="employeeObj.email">
-    </mat-form-field>
+    <div class="row">
+      <mat-form-field appearance="outline">
+        <mat-label>Email</mat-label>
+        <input matInput placeholder="test@gmail.com" type="email" [(ngModel)]="employeeObj.email">
+      </mat-form-field>
+    </div>
+    <div mat-dialog-actions>
+      <button mat-raised-button (click)="onsave()">Save</button>
+      <button mat-raised-button (click)="oncancel()">Cancel</button>
+    </div>
   </div>
-  <div mat-dialog-actions>
-    <button mat-raised-button (click)="onsave()">Save</button>
-    <button mat-raised-button (click)="oncancel()">Cancel</button>
-  </div>
-</div>
 </div>
